@@ -94,10 +94,95 @@ func (*Client) url(path string, q url.Values) string {
 	return u
 }
 
+// UpdatePage updates a Notion page with the given properties
+func (c *Client) UpdatePage(ctx context.Context, pageID string, properties map[string]PropertyValue) error {
+	req := UpdatePageRequest{
+		Properties: properties,
+	}
+	return c.Do(ctx, http.MethodPatch, "/pages/"+pageID, nil, req, nil)
+}
+
+// CreatePage creates a new page in the specified datasource
+func (c *Client) CreatePage(ctx context.Context, datasourceID string, properties map[string]PropertyValue) (*Page, error) {
+	req := CreatePageRequest{
+		Parent: Parent{
+			Type:         "data_source_id",
+			DatasourceID: datasourceID,
+		},
+		Properties: properties,
+	}
+	var resp Page
+	err := c.Do(ctx, http.MethodPost, "/pages", nil, req, &resp)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// CreatePageRequest represents a page creation request
+type CreatePageRequest struct {
+	Parent     Parent                   `json:"parent"`
+	Properties map[string]PropertyValue `json:"properties"`
+}
+
+// QueryPages queries pages in a datasource with optional filters
+func (c *Client) QueryPages(ctx context.Context, datasourceID string, filter map[string]any) (*QueryResponse, error) {
+	req := QueryRequest{
+		PageSize: DefaultPageSize,
+	}
+
+	// If filter is provided, add it to the request
+	if filter != nil {
+		// For now, we'll implement a simple filter structure
+		// This could be expanded to support more complex filters
+		req.Filter = filter
+	}
+
+	var resp QueryResponse
+	err := c.Do(ctx, http.MethodPost, "/data_sources/"+datasourceID+"/query", nil, req, &resp)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// FindPageByTitle finds a page by title in a datasource
+func (c *Client) FindPageByTitle(ctx context.Context, datasourceID, title string) (*Page, error) {
+	filter := map[string]any{
+		"property": "Name",
+		"title": map[string]any{
+			"equals": title,
+		},
+	}
+
+	resp, err := c.QueryPages(ctx, datasourceID, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(resp.Results) > 0 {
+		return &resp.Results[0], nil
+	}
+
+	return nil, nil // Not found
+}
+
+// Parent represents the parent of a page
+type Parent struct {
+	Type         string `json:"type"`
+	DatasourceID string `json:"data_source_id,omitempty"`
+}
+
+// UpdatePageRequest represents a page update request
+type UpdatePageRequest struct {
+	Properties map[string]PropertyValue `json:"properties"`
+}
+
 // QueryRequest represents a query request
 type QueryRequest struct {
-	PageSize    int     `json:"page_size,omitempty"`
-	StartCursor *string `json:"start_cursor,omitempty"`
+	PageSize    int         `json:"page_size,omitempty"`
+	StartCursor *string     `json:"start_cursor,omitempty"`
+	Filter      interface{} `json:"filter,omitempty"`
 }
 
 // QueryResponse represents a query response
@@ -139,7 +224,13 @@ type PropertyValue struct {
 
 // RichText represents rich text
 type RichText struct {
-	PlainText string `json:"plain_text"`
+	Type string       `json:"type"`
+	Text *TextContent `json:"text,omitempty"`
+}
+
+// TextContent represents the text content of rich text
+type TextContent struct {
+	Content string `json:"content"`
 }
 
 // SelectOption represents a select option
@@ -181,7 +272,6 @@ type RollupValue struct {
 	Array  []PropertyValue `json:"array,omitempty"`
 }
 
-// ExtractStrings extracts string values from a property value
 func ExtractStrings(p PropertyValue) []string {
 	switch p.Type {
 	case "title":
@@ -355,7 +445,17 @@ func ExtractStrings(p PropertyValue) []string {
 func concatRichText(rts []RichText) string {
 	var b strings.Builder
 	for _, rt := range rts {
-		b.WriteString(rt.PlainText)
+		if rt.Text != nil {
+			b.WriteString(rt.Text.Content)
+		}
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func ExtractString(p PropertyValue) string {
+	strs := ExtractStrings(p)
+	if len(strs) > 0 {
+		return strings.TrimSpace(strs[0])
+	}
+	return ""
 }
