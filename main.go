@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
 	"strings"
 
 	"notion-tools/internal/notion"
@@ -27,7 +26,6 @@ func main() {
 	var (
 		tokenFlag = flag.String("token", "", "Notion integration token (or set NOTION_TOKEN)")
 		fieldName = flag.String("field", defaultWhoPropName, "Property name to extract (default: who)")
-		unique    = flag.Bool("unique", false, "Print unique values only (sorted)")
 	)
 	flag.Parse()
 
@@ -50,8 +48,6 @@ func main() {
 	// Reduce payload to just the property we care about.
 	qp := url.Values{}
 	qp.Add("filter_properties[]", field)
-
-	valuesSet := map[string]struct{}{}
 
 	var cursor *string
 	for {
@@ -76,11 +72,8 @@ func main() {
 				if v == "" {
 					continue
 				}
-				if *unique {
-					valuesSet[v] = struct{}{}
-				} else {
-					fmt.Println(v)
-				}
+				fmt.Println(v)
+
 			}
 		}
 
@@ -88,17 +81,6 @@ func main() {
 			break
 		}
 		cursor = resp.NextCursor
-	}
-
-	if *unique {
-		out := make([]string, 0, len(valuesSet))
-		for v := range valuesSet {
-			out = append(out, v)
-		}
-		sort.Strings(out)
-		for _, v := range out {
-			fmt.Println(v)
-		}
 	}
 }
 
