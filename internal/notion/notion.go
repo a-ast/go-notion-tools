@@ -40,10 +40,7 @@ func NewClient(token string) *Client {
 
 // Do performs an HTTP request to the Notion API
 func (c *Client) Do(ctx context.Context, method, path string, q url.Values, body any, out any) error {
-	u := BaseURL + path
-	if len(q) > 0 {
-		u += "?" + q.Encode()
-	}
+	u := c.url(path, q)
 
 	var r io.Reader
 	if body != nil {
@@ -87,6 +84,14 @@ func (c *Client) Do(ctx context.Context, method, path string, q url.Values, body
 		return fmt.Errorf("unmarshal response: %w (body=%s)", err, strings.TrimSpace(string(respBody)))
 	}
 	return nil
+}
+
+func (*Client) url(path string, q url.Values) string {
+	u := BaseURL + path
+	if len(q) > 0 {
+		u += "?" + q.Encode()
+	}
+	return u
 }
 
 // QueryRequest represents a query request
