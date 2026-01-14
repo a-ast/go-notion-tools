@@ -49,6 +49,7 @@ func main() {
 	qp := url.Values{}
 	qp.Add("filter_properties[]", "Name")
 	qp.Add("filter_properties[]", srcField)
+	qp.Add("filter_properties[]", "People")
 
 	var cursor *string
 	for {
@@ -70,6 +71,15 @@ func main() {
 			if !ok {
 				fatal(fmt.Errorf("property %q not found on returned pages; check the exact column name in Notion", srcField))
 			}
+
+			// Check if People field is empty
+			peopleProp, peopleExists := pg.Properties["People"]
+			if peopleExists && len(peopleProp.Relation) > 0 {
+				// People field is not empty, skip updating
+				fmt.Println(".")
+				continue
+			}
+
 			who := notion.ExtractString(prop)
 
 			cleanedPersons := extractPersons(who)
